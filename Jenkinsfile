@@ -1,6 +1,8 @@
 pipeline {
     agent any
-    
+      tools {
+        nodejs 'Node25'  // Must match the name you set in Jenkins Tools
+    }
     environment {
         DOCKER_IMAGE = 'react-vite-app'
         DOCKER_TAG = "${BUILD_NUMBER}"
