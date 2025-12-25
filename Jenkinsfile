@@ -1,13 +1,16 @@
 pipeline {
     agent any
-      tools {
+    
+    tools {
         nodejs 'Node25'  // Must match the name you set in Jenkins Tools
     }
+    
     environment {
         DOCKER_IMAGE = 'react-vite-app'
         DOCKER_TAG = "${BUILD_NUMBER}"
         CONTAINER_NAME = 'react-app-container'
         HOST_PORT = '3000'
+        PATH = "/usr/local/bin:/usr/bin:/bin:${env.PATH}"
     }
     
     stages {
@@ -41,10 +44,10 @@ pipeline {
             steps {
                 echo 'Building Docker image...'
                 dir('frontend') {
-                    script {
-                        dockerImage = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
-                        sh "docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest"
-                    }
+                    sh """
+                        docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
+                        docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest
+                    """
                 }
             }
         }
@@ -52,38 +55,28 @@ pipeline {
         stage('Deploy') {
             steps {
                 echo 'Deploying application...'
-                script {
-                    // Stop and remove old container if exists
-                    sh '''
-                        docker stop ${CONTAINER_NAME} || true
-                        docker rm ${CONTAINER_NAME} || true
-                    '''
-                    
-                    // Run new container
-                    sh """
-                        docker run -d \
-                            --name ${CONTAINER_NAME} \
-                            -p ${HOST_PORT}:80 \
-                            --restart unless-stopped \
-                            ${DOCKER_IMAGE}:${DOCKER_TAG}
-                    """
-                }
+                sh """
+                    docker stop ${CONTAINER_NAME} || true
+                    docker rm ${CONTAINER_NAME} || true
+                    docker run -d \
+                        --name ${CONTAINER_NAME} \
+                        -p ${HOST_PORT}:80 \
+                        --restart unless-stopped \
+                        ${DOCKER_IMAGE}:${DOCKER_TAG}
+                """
             }
         }
         
         stage('Clean Up Old Images') {
             steps {
                 echo 'Cleaning up old Docker images...'
-                script {
-                    // Keep only last 5 builds
-                    sh '''
-                        docker images ${DOCKER_IMAGE} --format "{{.Tag}}" | \
-                        grep -E '^[0-9]+$' | \
-                        sort -rn | \
-                        tail -n +6 | \
-                        xargs -I {} docker rmi ${DOCKER_IMAGE}:{} || true
-                    '''
-                }
+                sh """
+                    docker images ${DOCKER_IMAGE} --format "{{.Tag}}" | \
+                    grep -E '^[0-9]+\$' | \
+                    sort -rn | \
+                    tail -n +6 | \
+                    xargs -I {} docker rmi ${DOCKER_IMAGE}:{} || true
+                """
             }
         }
     }
